@@ -24,7 +24,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 // 메시지 리스너
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   console.log('[Background] 메시지 수신:', message);
    sendResponse({ status: 'ok' });
    return true;
