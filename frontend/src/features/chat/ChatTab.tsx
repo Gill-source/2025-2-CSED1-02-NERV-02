@@ -7,19 +7,36 @@ const ChatTab = () => {
 
   // 1. 현재 탭의 Video ID 추출
   useEffect(() => {
+    // 크롬 익스텐션 환경인지 확인
     if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.query) {
+      // 현재 활성화된 탭 정보 가져오기
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        const urlStr = tabs[0]?.url;
-        if (urlStr) {
-          const url = new URL(urlStr);
-          const v = url.searchParams.get('v');
-          if (v) setVideoId(v);
-          else setErrorMsg("유튜브 영상 페이지가 아닙니다.");
+        const currentTab = tabs[0];
+        const urlStr = currentTab?.url;
+
+        if (urlStr && urlStr.includes('youtube.com/watch')) {
+          try {
+            const url = new URL(urlStr);
+            const v = url.searchParams.get('v'); // URL에서 'v' 파라미터 추출
+            if (v) {
+              setVideoId(v); // 성공! Video ID 설정
+              setErrorMsg(null);
+            } else {
+              setErrorMsg("유튜브 영상 ID를 찾을 수 없습니다.");
+            }
+          } catch (e) {
+            setErrorMsg("URL을 분석할 수 없습니다.");
+          }
+        } else {
+          // 유튜브가 아니거나 탭 정보를 못 가져온 경우
+          setErrorMsg("유튜브 영상 페이지에서 실행해주세요.");
         }
       });
-    } else {
-      console.log("로컬 개발 환경: Mock ID 사용");
-      setVideoId('test_video_id');
+    } 
+    // 로컬 개발 환경 (pnpm dev)
+    else {
+      console.log("로컬 개발 환경: 테스트용 ID 사용");
+      setVideoId('Z7_WWJEj-j8');
     }
   }, []);
 

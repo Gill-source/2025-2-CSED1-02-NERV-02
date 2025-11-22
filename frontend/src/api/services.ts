@@ -53,11 +53,11 @@ const MOCK_DATA: YoutubeAnalysisResponse = {
 
 export const fetchAnalysis = async (videoId: string): Promise<YoutubeAnalysisResponse> => {
   // 로컬 개발 환경이거나 videoId가 테스트용이면 Mock 데이터 반환
-  if (!import.meta.env.PROD || videoId === 'test_video_id') {
-    console.log(`[Mock API] Fetching analysis for ${videoId}`);
-    await new Promise((resolve) => setTimeout(resolve, 800)); // 0.8초 딜레이 시뮬레이션
-    return MOCK_DATA;
-  }
+  // if (!import.meta.env.PROD || videoId === 'test_video_id') {
+  //   console.log(`[Mock API] Fetching analysis for ${videoId}`);
+  //   await new Promise((resolve) => setTimeout(resolve, 800)); // 0.8초 딜레이 시뮬레이션
+  //   return MOCK_DATA;
+  // }
 
   // 실제 API 호출
   const response = await client.post(`/api/workflow/analyze-youtube`, null, {
