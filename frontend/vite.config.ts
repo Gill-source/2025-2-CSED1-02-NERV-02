@@ -15,11 +15,12 @@ export default defineConfig({
         // 팝업 페이지 엔트리 포인트 설정
         popup: resolve(__dirname, 'popup.html'),
         background: resolve(__dirname, 'src/background/service-worker.ts'), 
+        content: resolve(__dirname, 'src/content/content-script.tsx'),
       },
       output: {
-        entryFileNames: 'assets/[name].js',
-        chunkFileNames: 'assets/[name].js',
-        assetFileNames: 'assets/[name].[ext]'
+        entryFileNames: '[name].js',
+        chunkFileNames: '[name].js',
+        assetFileNames: '[name].[ext]'
       }
     }
   }
