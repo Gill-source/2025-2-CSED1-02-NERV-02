@@ -20,7 +20,8 @@ except ImportError as e:
 app = FastAPI(
     title="YouTube Comment Filtering System API",
     description="1차/2차/위험도/정책 모델을 엄격하게 분리하여 단계별 데이터 변화를 명확히 보여주는 API",
-    version="2.0.0"
+    version="2.0.0",
+    openapi_version="3.0.2"
 )
 
 app.add_middleware(
