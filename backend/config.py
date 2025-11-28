@@ -19,8 +19,8 @@ USE_DETAIL_AI_MODEL = os.getenv("USE_DETAIL_AI_MODEL", "False").lower() == "true
 # 이 점수 이상이면 규정 위반으로 간주
 RISK_THRESHOLD = float(os.getenv("RISK_THRESHOLD", 0.65))
 
-# AI 모델 경로 (추후 사용)
-BASE_MODEL_PATH = "resources/models/AI_model.h5"
+# Basic 모듈 기준 점수 (0.0 ~ 1.0)
+BASIC_THRESHOLD = float(os.getenv("BASIC_THRESHOLD", 0.9))
 
 
 # ===========================================================
