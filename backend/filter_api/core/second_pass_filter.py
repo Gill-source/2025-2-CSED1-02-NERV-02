@@ -2,10 +2,14 @@ import json
 import openai
 import sys
 import os
+import torch
+import re
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 # config.py를 찾기 위한 경로 설정
 current_dir = os.path.dirname(__file__)
-backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+project_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+backend_dir = os.path.join(project_dir, "backend")
 sys.path.append(backend_dir)
 
 try:
@@ -17,6 +21,26 @@ except ImportError:
 
 class SecondPassFilter:
     def __init__(self, api_key=None):
+        # 프롬프트 모듈 설정 로드
+        self.basic_ai_module = config.BASIC_AI_MODULE
+        self.special_ai_modules = config.SPECIAL_AI_MODULES
+        
+        # AI 모듈 초기화
+        self.basic_module_dir = os.path.join(backend_dir, "resources\\modules\\basic_ai_module")
+        self.basic_threshold = config.BASIC_THRESHOLD
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        try:
+            self.tokenizer = AutoTokenizer.from_pretrained(self.basic_module_dir)
+            self.basic_module = AutoModelForSequenceClassification.from_pretrained(self.basic_module_dir)
+            self.basic_module.to(self.device)
+            self.basic_module.eval()
+        except Exception as e:
+            print(f"[ERROR] BASIC 모듈 로드 실패: {e}")
+            self.tokenizer = None
+            self.basic_module_dir = None
+
+        # OPEN AI 클라이언트 초기화
         api_key = config.OPENAI_API_KEY
         
         if api_key:
@@ -25,10 +49,57 @@ class SecondPassFilter:
         else:
             # 키가 없으면 클라이언트를 None으로 설정하고 경고 출력
             self.client = None
-            print("[WARNING] OPENAI_API_KEY가 설정되지 않았습니다. 2차 필터링(AI)이 비활성화됩니다.")    
-        
-        self.special_ai_modules = config.SPECIAL_AI_MODULES
-        self.basic_ai_module = config.BASIC_AI_MODULE
+            print("[WARNING] OPENAI_API_KEY가 설정되지 않았습니다. 2차 필터링(AI)이 비활성화됩니다.")        
+
+    def _tokenize_for_module(self, text: str):
+        """ 
+        [토큰화 담당] Basic 모듈에서의 처리를 위한 토큰화를 진행합니다.
+        """
+        if not text:
+            return []
+
+        # 마스킹 토큰을 공백으로 치환
+        tmp = text
+        for ph in ("__F__", "__B__", "__W__"):
+            tmp = tmp.replace(ph, " ")
+
+        raw_tokens = re.findall(r"[가-힣ㄱ-ㅎㅏ-ㅣA-Za-z0-9]+", tmp)
+
+        tokens = []
+        for w in raw_tokens:
+            w = w.strip()
+            if not w:
+                continue
+
+            if len(w) == 1 and not w.isdigit():
+                continue
+            
+            if len(w) >= 10:
+                continue
+            tokens.append(w)
+
+        return tokens
+    
+    def _call_basic_module(self, token: str) -> float:
+        """
+        [Basic 모듈 실행 담당] Basic 모듈을 이용하여 문장을 분석합니다.
+        """
+        if not self.basic_module or not self.tokenizer:
+            return 0.0
+
+        inputs = self.tokenizer(
+            token,
+            truncation=True,
+            padding=False,
+            max_length=64,
+            return_tensors="pt",
+        )
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
+        with torch.no_grad():
+            outputs = self.basic_module(**inputs)
+            probs = torch.softmax(outputs.logits, dim=-1)[0]
+            return float(probs[1]) # 악성일 확률
 
     def _construct_prompt(self, text):
         """
@@ -74,7 +145,7 @@ class SecondPassFilter:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini", # 또는 "gpt-3.5-turbo" (가성비 모델)
+                model="gpt-3.5-turbo", # 또는 "gpt-4o-mini" (상위 모델)
                 messages=[
                     {"role": "system", "content": "You are a strict content moderator. Output in JSON."},
                     {"role": "user", "content": prompt}
@@ -98,13 +169,28 @@ class SecondPassFilter:
         second_pass_result = first_pass_result
 
         try:
-            # 1. 프롬프트 생성
+            # 1. Basic 모듈 처리
+            if self.basic_module is not None:
+                current_text = second_pass_result.get("text_for_filtering", "")
+                tokens = self._tokenize_for_module(current_text)
+
+                for word in tokens:
+                    score = self._call_basic_module(word)
+                    if score >= self.basic_threshold:
+                        second_pass_result['status'] = "FILTERED_BY_SECOND_PASS"
+                        second_pass_result["detected_words"].append({
+                            "word": word,
+                            "type": "AI_BASIC"
+                        })
+                        second_pass_result["text_for_filtering"] = second_pass_result["text_for_filtering"].replace(word, "__S__")
+
+            # 2. 프롬프트 생성
             prompt_text = self._construct_prompt(second_pass_result.get('text_for_filtering', ''))
             
-            # 2. API 호출
+            # 3. API 호출
             gpt_response = self._call_openai_api(prompt_text)
 
-            # 3. 결과 처리
+            # 4. 결과 처리
             ai_detected_items = gpt_response.get('detected_items', [])
             
             if ai_detected_items:
@@ -129,3 +215,58 @@ class SecondPassFilter:
         except Exception as e:
             print(f"2차 필터 에러: {e}")
             return first_pass_result
+        
+        
+if __name__ == "__main__":
+    print("==========================================")
+    print("▶ [Debug] 2차 필터링 독립 실행 테스트")
+    print("==========================================")
+
+    second_filter = SecondPassFilter()
+
+    # 테스트 케이스
+    test_cases = [
+        {
+            "desc": "정상 문장 (감지된 것 없음)",
+            "input": {
+                "detected_words": [],
+                "text_for_filtering": "안녕하세요 반갑습니다"
+            }
+        },
+        {
+            "desc": "욕설 회피 (문자)",
+            "input": {
+                "detected_words": [{'word': '바보', 'type': 'SYSTEM_KEYWORD'}],
+                "text_for_filtering": "너 진짜 느ㄱㄷㅈㅂ금마 병신 __F__ 구나"
+            }
+        },
+        {
+            "desc": "욕설 회피 (숫자)",
+            "input": {
+                "detected_words": [
+                    {'word': '씨발', 'type': 'SYSTEM_KEYWORD'},
+                    {'word': '개새끼', 'type': 'SYSTEM_KEYWORD'},
+                    {'word': '병신', 'type': 'SYSTEM_KEYWORD'}
+                ],
+                "text_for_filtering": "씨1321발 __F__ __F__ 너는 진짜 __F__ 이야"
+            }
+        }
+    ]
+
+    for idx, case in enumerate(test_cases, start=1):
+        print(f"\n[Scenario]: {case['desc']}")
+
+        first_pass_result = {
+            "status": "FILTERED_BY_FIRST_PASS",
+            "detected_words": list(case["input"].get("detected_words", [])),  # 얕은 복사
+            "text_for_filtering": case["input"].get("text_for_filtering", "")
+        }
+        print(f"  ㄴ Input Data: {case['input']['detected_words']}")
+        print(f"  ㄴ Text Context: \"{case['input']['text_for_filtering']}\"")
+
+        # 2차 필터 실행
+        result = second_filter.execute(first_pass_result)
+
+        print(f"  ㄴ Output Data: {result['detected_words']}")
+        print(f"  ㄴ Output Text Context: {result['text_for_filtering']} ")
+        print("\n" + "-" * 40)
