@@ -167,7 +167,7 @@ class SecondPassFilter:
         메인 실행 함수
         """
         second_pass_result = first_pass_result
-        
+
         try:
             # 1. Basic 모듈 처리
             if self.basic_module is not None:
@@ -215,3 +215,58 @@ class SecondPassFilter:
         except Exception as e:
             print(f"2차 필터 에러: {e}")
             return first_pass_result
+        
+        
+if __name__ == "__main__":
+    print("==========================================")
+    print("▶ [Debug] 2차 필터링 독립 실행 테스트")
+    print("==========================================")
+
+    second_filter = SecondPassFilter()
+
+    # 테스트 케이스
+    test_cases = [
+        {
+            "desc": "정상 문장 (감지된 것 없음)",
+            "input": {
+                "detected_words": [],
+                "text_for_filtering": "안녕하세요 반갑습니다"
+            }
+        },
+        {
+            "desc": "욕설 회피 (문자)",
+            "input": {
+                "detected_words": [{'word': '바보', 'type': 'SYSTEM_KEYWORD'}],
+                "text_for_filtering": "너 진짜 느ㄱㄷㅈㅂ금마 병신 __F__ 구나"
+            }
+        },
+        {
+            "desc": "욕설 회피 (숫자)",
+            "input": {
+                "detected_words": [
+                    {'word': '씨발', 'type': 'SYSTEM_KEYWORD'},
+                    {'word': '개새끼', 'type': 'SYSTEM_KEYWORD'},
+                    {'word': '병신', 'type': 'SYSTEM_KEYWORD'}
+                ],
+                "text_for_filtering": "씨1321발 __F__ __F__ 너는 진짜 __F__ 이야"
+            }
+        }
+    ]
+
+    for idx, case in enumerate(test_cases, start=1):
+        print(f"\n[Scenario]: {case['desc']}")
+
+        first_pass_result = {
+            "status": "FILTERED_BY_FIRST_PASS",
+            "detected_words": list(case["input"].get("detected_words", [])),  # 얕은 복사
+            "text_for_filtering": case["input"].get("text_for_filtering", "")
+        }
+        print(f"  ㄴ Input Data: {case['input']['detected_words']}")
+        print(f"  ㄴ Text Context: \"{case['input']['text_for_filtering']}\"")
+
+        # 2차 필터 실행
+        result = second_filter.execute(first_pass_result)
+
+        print(f"  ㄴ Output Data: {result['detected_words']}")
+        print(f"  ㄴ Output Text Context: {result['text_for_filtering']} ")
+        print("\n" + "-" * 40)
