@@ -18,7 +18,13 @@ const STORAGE_KEY = 'guard-filter-settings';
 
 const defaultSettings: AppSettings = {
   intensity: 3,
-  modules: { criticism: true, conflict: true, gaslighting: false, sexual: true, relevance: false },
+  modules: {  modified: false,
+    sexual: false,
+    privacy: false,
+    aggression: false,
+    political: false,
+    spam: false,
+    family: false, },
   whiteList: ['바보', '멍청이'],
   blackList: ['비하 별명', '경쟁 채널'],
 };
