@@ -3,7 +3,7 @@ import os
 from typing import List, Optional, Dict, Any
 from dotenv import set_key, find_dotenv
 
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Body, Query
 from pydantic import BaseModel, Field
 from starlette.middleware.cors import CORSMiddleware
 
@@ -52,9 +52,20 @@ except Exception as e:
 
 # [사전 관리 모델]
 
-class DictionaryAddRequest(BaseModel):
-    word: str = Field(..., description="추가할 단어", json_schema_extra={"example": "나쁜말"})
+class DictionaryRequest(BaseModel):
+    words: List[str] = Field(..., description="추가/삭제할 단어 리스트", json_schema_extra={"example": ["바보", "멍청이"]})
     list_type: str = Field(..., description="'whitelist' 또는 'blacklist'", json_schema_extra={"example": "blacklist"})
+
+class DictionaryResponse(BaseModel):
+    whitelist: List[str] = Field(default_factory=list, description="허용 단어 목록")
+    blacklist: List[str] = Field(default_factory=list, description="차단 단어 목록")
+    total_count: int = Field(..., description="조회된 총 단어 수")
+
+class DictionaryUpdateResponse(BaseModel):
+    status: str
+    message: str
+    processed_count: int
+    current_total: Dict[str, int]
 
 # [시스템 설정 모델]
 
@@ -158,31 +169,69 @@ class YoutubeAnalysisResponse(BaseModel):
 # [API 1] 시스템 설정 관리 API (System Config APIs)
 # =========================================================
 
-@app.post("/api/system/dictionary", summary="사용자 사전(화이트/블랙) 단어 추가")
-async def add_dictionary_word(req: DictionaryAddRequest):
+@app.get("/api/system/dictionary", response_model=DictionaryResponse, summary="사용자 사전 목록 조회")
+async def get_dictionary_list(
+    list_type: str = Query(..., description="조회할 타입 ('whitelist' 또는 'blacklist')")
+):
     """
-    사용자 정의 화이트리스트 또는 블랙리스트에 단어를 추가하고 즉시 적용합니다.
-    - **list_type**: 'whitelist' (허용) / 'blacklist' (차단)
+    사용자 사전 목록을 조회합니다. list_type('whitelist', 'blacklist')을 지정해야 합니다.
+    """
+    if list_type not in ['whitelist', 'blacklist']:
+        raise HTTPException(status_code=400, detail="list_type은 'whitelist' 또는 'blacklist'여야 합니다.")
+
+    # 데이터 가져오기
+    data = first_filter.get_user_dictionary(list_type)
+    
+    whitelist = data.get('whitelist', [])
+    blacklist = data.get('blacklist', [])
+    
+    return {
+        "whitelist": whitelist,
+        "blacklist": blacklist,
+        "total_count": len(whitelist) + len(blacklist)
+    }
+
+@app.post("/api/system/dictionary", response_model=DictionaryUpdateResponse, summary="단어 일괄 추가 (배열)")
+async def add_dictionary_words(req: DictionaryRequest):
+    """
+    여러 단어를 리스트로 받아 사전에 추가합니다. (중복 무시)
     """
     if req.list_type not in ['whitelist', 'blacklist']:
-        raise HTTPException(status_code=400, detail="list_type은 'whitelist' 또는 'blacklist'여야 합니다.")
+        raise HTTPException(status_code=400, detail="list_type 오류")
     
-    success = first_filter._update_user_dictionary(req.word, req.list_type)
+    # 추가 함수 호출 (action='add')
+    added_count = first_filter._update_user_dictionary(req.words, req.list_type, action='add')
     
-    if success:
-        return {
-            "status": "success",
-            "message": f"'{req.word}' 단어가 {req.list_type}에 추가되었습니다.",
-            "current_count": {
-                "whitelist": len(first_filter.user_whitelist),
-                "blacklist": len(first_filter.user_blacklist)
-            }
+    return {
+        "status": "success",
+        "message": f"{added_count}개의 단어가 {req.list_type}에 추가되었습니다.",
+        "processed_count": added_count,
+        "current_total": {
+            "whitelist": len(first_filter.user_whitelist),
+            "blacklist": len(first_filter.user_blacklist)
         }
-    else:
-        return {
-            "status": "ignored",
-            "message": f"'{req.word}' 단어는 이미 {req.list_type}에 존재하거나 저장에 실패했습니다."
+    }
+
+@app.delete("/api/system/dictionary", response_model=DictionaryUpdateResponse, summary="단어 일괄 삭제 (배열)")
+async def remove_dictionary_words(req: DictionaryRequest):
+    """
+    여러 단어를 리스트로 받아 사전에서 삭제합니다. (없는 단어 무시)
+    """
+    if req.list_type not in ['whitelist', 'blacklist']:
+        raise HTTPException(status_code=400, detail="list_type 오류")
+    
+    # 삭제 함수 호출 (action='remove')
+    removed_count = first_filter._update_user_dictionary(req.words, req.list_type, action='remove')
+    
+    return {
+        "status": "success",
+        "message": f"{removed_count}개의 단어가 {req.list_type}에서 삭제되었습니다.",
+        "processed_count": removed_count,
+        "current_total": {
+            "whitelist": len(first_filter.user_whitelist),
+            "blacklist": len(first_filter.user_blacklist)
         }
+    }
 
 @app.get("/api/system/config", response_model=SystemConfigResponse, summary="현재 시스템 설정 조회")
 async def get_system_config():
