@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { useAddDictionaryWord, useDictionary, useUpdateDictionary } from '../../hooks/useSystemConfig';
+import { useAddDictionaryWord, useDictionary, useDeleteDictionaryWord } from '../../hooks/useSystemConfig';
 
 // ----------------------------------------------------------------------
 // [내부 컴포넌트] 필터 섹션 (화이트리스트/블랙리스트 공통 UI)
@@ -140,31 +140,35 @@ const FilterSection = ({ title, description, tags, onUpdateTags, placeholder }: 
 const FilterTab = () => {
   const { data: dictionary } = useDictionary();
   const addMutation = useAddDictionaryWord();  
-  const updateMutation = useUpdateDictionary(); 
+ const deleteMutation = useDeleteDictionaryWord();
   if (!dictionary) return null;
 
 const handleUpdateTags = (newTags: string[], type: 'whitelist' | 'blacklist') => {
-  const currentTags = type === 'whitelist' ? dictionary.whitelist : dictionary.blacklist;
-  
-  if (newTags.length > currentTags.length) {
-    const addedWords = newTags.filter(tag => !currentTags.includes(tag));
+    const currentTags = type === 'whitelist' ? dictionary.whitelist : dictionary.blacklist;
     
-    if (addedWords.length > 0) {
-      addMutation.mutate({ 
-        words: addedWords, 
-        list_type: type 
-      });
+    // CASE 1: 단어가 추가된 경우 (POST)
+    if (newTags.length > currentTags.length) {
+      const addedWords = newTags.filter(tag => !currentTags.includes(tag));
+      
+      if (addedWords.length > 0) {
+        addMutation.mutate({ 
+          words: addedWords, 
+          list_type: type 
+        });
+      }
+    } 
+    // CASE 2: 단어가 삭제된 경우 (DELETE)
+    else if (newTags.length < currentTags.length) {
+      const deletedWords = currentTags.filter(tag => !newTags.includes(tag));
+      
+      if (deletedWords.length > 0) {
+        deleteMutation.mutate({ 
+          words: deletedWords, 
+          list_type: type 
+        });
+      }
     }
-  } 
-
-  else {
-    if (type === 'whitelist') {
-      updateMutation.mutate({ whitelist: newTags });
-    } else {
-      updateMutation.mutate({ blacklist: newTags });
-    }
-  }
-};
+  };
 
   return (
     <div className="p-6 bg-white h-full">

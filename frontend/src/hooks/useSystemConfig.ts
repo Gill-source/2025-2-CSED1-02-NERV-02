@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchSystemConfig, updateSystemConfig, addDictionaryWord, fetchDictionary, updateDictionary } from '../api/services';
-import type { AppSettings, SystemConfigResponse, DictionaryRequest, DictionaryResponse, DictionaryUpdate } from '../api/types';
+import { fetchSystemConfig, updateSystemConfig, addDictionaryWord, fetchDictionary, deleteDictionaryWord } from '../api/services';
+import type { AppSettings, SystemConfigResponse, DictionaryRequest, DictionaryResponse, DictionaryUpdateResponse } from '../api/types';
 
 const MODULE_MAP: Record<keyof AppSettings['modules'], string> = {
   modified: 'MODIFIED',
@@ -24,7 +24,11 @@ const DEFAULT_SETTINGS: AppSettings = {
     spam: false,
     family: false,
   },
-  // [수정] 화이트/블랙리스트 제거 완료 (Dictionary API로 이동됨)
+};
+
+const MOCK_DICTIONARY = {
+  whitelist: ['개꿀', '미쳤다', '지린다'],
+  blacklist: ['카톡방', '무료종목', '010-']
 };
 
 // [변환기] 백엔드 -> 프론트엔드
@@ -124,10 +128,26 @@ export const useUpdateSettings = () => {
 export const useDictionary = () => {
   return useQuery({
     queryKey: ['system-dictionary'],
-    queryFn: fetchDictionary,
-    // [중요] 서버 데이터가 없어도(에러 시) 빈 배열로 시작해서 화면이 안 죽게 함
-    initialData: { whitelist: [], blacklist: [] } as DictionaryResponse,
-    staleTime: Infinity, // 오프라인 상태에서 데이터가 자꾸 사라지는 것 방지
+    queryFn: async () => {
+      try {
+        // 백엔드 스펙상 따로 조회해야 하므로 Promise.all로 병렬 처리
+        const [whiteRes, blackRes] = await Promise.all([
+          fetchDictionary('whitelist'),
+          fetchDictionary('blacklist')
+        ]);
+        
+        // 두 결과를 하나의 객체로 병합하여 반환 (UI 편의성)
+        return {
+          whitelist: whiteRes.whitelist || [],
+          blacklist: blackRes.blacklist || []
+        };
+      } catch (error) {
+        console.warn("서버 연결 실패, 목 데이터를 반환합니다.");
+        return MOCK_DICTIONARY;
+      }
+    },
+    initialData: MOCK_DICTIONARY,
+    staleTime: Infinity,
   });
 };
 
@@ -138,79 +158,53 @@ export const useAddDictionaryWord = () => {
   return useMutation({
     mutationFn: (req: DictionaryRequest) => addDictionaryWord(req),
     
-    // [1] 요청 즉시 화면(캐시) 업데이트 (낙관적 업데이트)
+    // 낙관적 업데이트 (추가)
     onMutate: async (newWordReq) => {
       await queryClient.cancelQueries({ queryKey: ['system-dictionary'] });
-
-      // 이전 데이터 스냅샷 (필요 없으면 안 써도 됨)
-      const previousData = queryClient.getQueryData<DictionaryResponse>(['system-dictionary']);
-
-      // 캐시 강제 업데이트!
-      queryClient.setQueryData<DictionaryResponse>(['system-dictionary'], (old) => {
-        // 기존 데이터가 없으면 빈 배열로 초기화
+      
+      queryClient.setQueryData(['system-dictionary'], (old: any) => {
         const current = old || { whitelist: [], blacklist: [] };
-        
         const isWhite = newWordReq.list_type === 'whitelist';
+        
         return {
           ...current,
-          // 배열에 새 단어들을 즉시 추가
           whitelist: isWhite ? [...current.whitelist, ...newWordReq.words] : current.whitelist,
           blacklist: !isWhite ? [...current.blacklist, ...newWordReq.words] : current.blacklist,
         };
       });
-
-      return { previousData };
     },
-    
-    // [2] 여기가 핵심! 에러가 나도 롤백(Rollback) 하지 않음
-    onError: (err, newWord, context) => {
-      console.error("서버 연결 실패 (하지만 화면엔 남겨둠):", err);
-      
-      // ❌ 아래 코드를 지우거나 주석 처리하세요! 
-      // if (context?.previousData) {
-      //   queryClient.setQueryData(['system-dictionary'], context.previousData);
-      // }
-
-      // 대신 사용자에게 살짝 알려줄 수는 있음 (선택사항)
-      // alert("서버와 연결되지 않아 임시로 저장되었습니다."); 
-    },
-
-    // [3] 성공/실패 후 처리
-    onSettled: () => {
-      // 서버가 살아있다면 최신 데이터를 받아오겠지만, 
-      // 죽어있다면 위에서 강제로 넣은 데이터가 그대로 화면에 남습니다.
-      queryClient.invalidateQueries({ queryKey: ['system-dictionary'] });
-    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['system-dictionary'] }),
   });
 };
 
-// 3. 수정/삭제 Hook (PATCH) - [서버 죽어도 화면엔 반영됨]
-export const useUpdateDictionary = () => {
+// 3. 삭제 Hook (DELETE) - [서버 죽어도 화면엔 반영됨]
+export const useDeleteDictionaryWord = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: DictionaryUpdate) => updateDictionary(data),
+    mutationFn: (req: DictionaryRequest) => deleteDictionaryWord(req),
     
-    onMutate: async (newData) => {
+    // 낙관적 업데이트 (삭제)
+    onMutate: async (delWordReq) => {
       await queryClient.cancelQueries({ queryKey: ['system-dictionary'] });
-      
-      queryClient.setQueryData<DictionaryResponse>(['system-dictionary'], (old) => {
+
+      queryClient.setQueryData(['system-dictionary'], (old: any) => {
         const current = old || { whitelist: [], blacklist: [] };
+        const isWhite = delWordReq.list_type === 'whitelist';
+        const targetWords = delWordReq.words; // 삭제할 단어들
+
         return {
           ...current,
-          whitelist: newData.whitelist ?? current.whitelist,
-          blacklist: newData.blacklist ?? current.blacklist,
+          // filter를 사용해 삭제할 단어들을 제외시킴
+          whitelist: isWhite 
+            ? current.whitelist.filter((w: string) => !targetWords.includes(w)) 
+            : current.whitelist,
+          blacklist: !isWhite 
+            ? current.blacklist.filter((w: string) => !targetWords.includes(w)) 
+            : current.blacklist,
         };
       });
     },
-
-    // 역시 에러 발생 시 롤백 코드 제거
-    onError: (err) => {
-      console.error("서버 연결 실패 (하지만 화면엔 반영됨):", err);
-    },
-
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['system-dictionary'] });
-    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['system-dictionary'] }),
   });
 };

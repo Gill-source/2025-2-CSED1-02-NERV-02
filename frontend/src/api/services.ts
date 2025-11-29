@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { YoutubeAnalysisResponse, SystemConfigResponse, SystemConfigUpdate, DictionaryRequest, DictionaryResponse, DictionaryUpdate } from './types';
+import type { YoutubeAnalysisResponse, SystemConfigResponse, SystemConfigUpdate, DictionaryRequest, DictionaryResponse, DictionaryUpdateResponse } from './types';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -38,19 +38,23 @@ export const updateSystemConfig = async (data: SystemConfigUpdate): Promise<Syst
 };
 
 // 1. 단어 목록 조회 (GET)
-export const fetchDictionary = async (): Promise<DictionaryResponse> => {
-  const response = await client.get<DictionaryResponse>('/api/system/dictionary');
+export const fetchDictionary = async (listType: 'whitelist' | 'blacklist'): Promise<DictionaryResponse> => {
+  const response = await client.get<DictionaryResponse>('/api/system/dictionary', {
+    params: { list_type: listType }
+  });
   return response.data;
 };
 
-// 2. 단어 추가 (POST)
-export const addDictionaryWord = async (req: DictionaryRequest): Promise<string> => {
-  const response = await client.post<string>('/api/system/dictionary', req);
+// 2. 단어 일괄 추가 (POST)
+export const addDictionaryWord = async (req: DictionaryRequest): Promise<DictionaryUpdateResponse> => {
+  const response = await client.post<DictionaryUpdateResponse>('/api/system/dictionary', req);
   return response.data;
 };
 
-// 3. 단어 목록 일괄 수정 (PATCH)
-export const updateDictionary = async (data: DictionaryUpdate): Promise<DictionaryResponse> => {
-  const response = await client.patch<DictionaryResponse>('/api/system/dictionary', data);
+// 3. 단어 목록 일괄 삭제 (DELETE)
+export const deleteDictionaryWord = async (req: DictionaryRequest): Promise<DictionaryUpdateResponse> => {
+  const response = await client.delete<DictionaryUpdateResponse>('/api/system/dictionary', {
+    data: req 
+  });
   return response.data;
 };

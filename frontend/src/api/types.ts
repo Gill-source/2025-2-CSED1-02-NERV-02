@@ -54,12 +54,17 @@ export interface DictionaryRequest {
   list_type: 'whitelist' | 'blacklist';
 }
 
-export interface DictionaryUpdate {
-  whitelist?: string[];
-  blacklist?: string[];
+export interface DictionaryResponse {
+  whitelist?: string[]; 
+  blacklist?: string[]; 
+  total_count: number;
 }
 
-export interface DictionaryResponse {
-  whitelist: string[];
-  blacklist: string[];
+export interface DictionaryUpdateResponse {
+  status: string;
+  message: string;
+  processed_count: number;
+  current_total: {
+    [key: string]: number;
+  };
 }
