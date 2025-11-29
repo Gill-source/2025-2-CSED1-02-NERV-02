@@ -50,6 +50,12 @@ except Exception as e:
 # [Pydantic 모델 정의] - 단계별 엄격한 분리 (Strict Mode)
 # =========================================================
 
+# [사전 관리 모델]
+
+class DictionaryAddRequest(BaseModel):
+    word: str = Field(..., description="추가할 단어", json_schema_extra={"example": "나쁜말"})
+    list_type: str = Field(..., description="'whitelist' 또는 'blacklist'", json_schema_extra={"example": "blacklist"})
+
 # [시스템 설정 모델]
 
 class SystemConfigUpdate(BaseModel):
@@ -151,6 +157,32 @@ class YoutubeAnalysisResponse(BaseModel):
 # =========================================================
 # [API 1] 시스템 설정 관리 API (System Config APIs)
 # =========================================================
+
+@app.post("/api/system/dictionary", summary="사용자 사전(화이트/블랙) 단어 추가")
+async def add_dictionary_word(req: DictionaryAddRequest):
+    """
+    사용자 정의 화이트리스트 또는 블랙리스트에 단어를 추가하고 즉시 적용합니다.
+    - **list_type**: 'whitelist' (허용) / 'blacklist' (차단)
+    """
+    if req.list_type not in ['whitelist', 'blacklist']:
+        raise HTTPException(status_code=400, detail="list_type은 'whitelist' 또는 'blacklist'여야 합니다.")
+    
+    success = first_filter._update_user_dictionary(req.word, req.list_type)
+    
+    if success:
+        return {
+            "status": "success",
+            "message": f"'{req.word}' 단어가 {req.list_type}에 추가되었습니다.",
+            "current_count": {
+                "whitelist": len(first_filter.user_whitelist),
+                "blacklist": len(first_filter.user_blacklist)
+            }
+        }
+    else:
+        return {
+            "status": "ignored",
+            "message": f"'{req.word}' 단어는 이미 {req.list_type}에 존재하거나 저장에 실패했습니다."
+        }
 
 @app.get("/api/system/config", response_model=SystemConfigResponse, summary="현재 시스템 설정 조회")
 async def get_system_config():
