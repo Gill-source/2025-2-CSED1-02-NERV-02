@@ -1,4 +1,5 @@
-import { useSettings, useUpdateSettings } from '../../hooks/useYoutubeQuery';
+import { useSettings, useUpdateSettings } from '../../hooks/useSystemConfig';
+import type { AppSettings } from '../../api/types';
 
 const ModuleTab = () => {
   const { data: settings } = useSettings();
@@ -43,31 +44,41 @@ const ModuleTab = () => {
 
   const currentInfo = intensityDescriptions[settings.intensity] || intensityDescriptions[3];
 
-  const moduleList = [
+ const moduleList = [
     { 
-      key: 'criticism', 
-      label: '유튜버 대상 비난', 
-      desc: '영상 내용과 무관한 인신공격을 탐지합니다.' 
-    },
-    { 
-      key: 'conflict', 
-      label: '갈등 조장/어그로', 
-      desc: '팬덤, 성별, 세대 간 갈등을 유발하는 댓글을 식별합니다.' 
-    },
-    { 
-      key: 'gaslighting', 
-      label: '신뢰도 저하/가스라이팅', 
-      desc: "'조작', '거짓말' 등의 키워드를 사용하거나 냉소적인 어조로 크리에이터의 전문성이나 진정성에 의혹을 심는 댓글을 탐지합니다." 
+      key: 'aggression', 
+      label: '악성 비난/협박', 
+      desc: '특정 대상에 대한 맹목적 비난, 살해 협박, 저주 등을 탐지합니다.'
     },
     { 
       key: 'sexual', 
-      label: '성희롱/선정적 괴롭힘', 
-      desc: '신체 부위나 의상을 언급하며 성적 불쾌감을 유발하거나 선정적인 언어를 사용한 괴롭힘 댓글을 탐지합니다.' 
+      label: '성희롱/음란물', 
+      desc: '성적 수치심을 유발하거나 음란한 묘사가 포함된 댓글을 탐지합니다.'
     },
     { 
-      key: 'relevance', 
-      label: '주제 연관성 및 비판 분석', 
-      desc: "댓글 내용이 영상 주제와 얼마나 관련 있는지 분석하고, 악의적인 '비난'인지 '건전한 비판'인지 문맥적으로 분류합니다." 
+      key: 'family', 
+      label: '패륜/가족 비하', 
+      desc: '부모, 자녀 등 가족을 비하하거나 모욕하는 패륜적 발언을 탐지합니다.'
+    },
+    { 
+      key: 'privacy', 
+      label: '개인정보 유출', 
+      desc: '전화번호, 주소, 실명, 계좌번호 등 개인정보가 포함된 댓글을 차단합니다.' 
+    },
+    { 
+      key: 'political', 
+      label: '정치/혐오 발언', 
+      desc: '영상 맥락과 무관한 정치적 선동이나 혐오 발언을 필터링합니다.' 
+    },
+    { 
+      key: 'spam', 
+      label: '스팸/도배/광고', 
+      desc: '광고성 링크, 도배, 무의미한 문자열 반복 등을 탐지합니다.' 
+    },
+    { 
+      key: 'modified', 
+      label: '필터 회피/변형 시도', 
+      desc: '자음/모음 분리(예: ㅂㅅ), 특수문자 삽입, 야민정음 등 필터링 회피 시도를 잡아냅니다.' 
     },
   ] as const;
 
@@ -109,7 +120,8 @@ const ModuleTab = () => {
 <section className="space-y-6 pt-4 border-t border-gray-100">
         <h3 className="text-sm font-bold mb-2">모듈 설정</h3>
         {moduleList.map((item) => {
-          const isActive = settings.modules[item.key];
+          const moduleKey = item.key as keyof AppSettings['modules'];
+          const isActive = settings.modules[moduleKey] ?? false;
 
           return (
             <div key={item.key} className="flex items-start justify-between">

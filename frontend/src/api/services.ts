@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { YoutubeAnalysisResponse } from './types';
+import type { YoutubeAnalysisResponse, SystemConfigResponse, SystemConfigUpdate } from './types';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -22,5 +22,17 @@ export const fetchAnalysis = async (videoId: string): Promise<YoutubeAnalysisRes
   const response = await client.post(`/api/workflow/analyze-youtube`, null, {
     params: { video_id: videoId, max_pages: 1 },
   });
+  return response.data;
+};
+
+// 2. 시스템 설정 조회 (GET)
+export const fetchSystemConfig = async (): Promise<SystemConfigResponse> => {
+  const response = await client.get<SystemConfigResponse>('/api/system/config');
+  return response.data;
+};
+
+// 3. 시스템 설정 업데이트 (PATCH)
+export const updateSystemConfig = async (data: SystemConfigUpdate): Promise<SystemConfigResponse> => {
+  const response = await client.patch<SystemConfigResponse>('/api/system/config', data);
   return response.data;
 };
