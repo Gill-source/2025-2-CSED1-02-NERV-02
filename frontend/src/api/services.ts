@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { YoutubeAnalysisResponse, SystemConfigResponse, SystemConfigUpdate } from './types';
+import type { YoutubeAnalysisResponse, SystemConfigResponse, SystemConfigUpdate, DictionaryRequest, DictionaryResponse, DictionaryUpdate } from './types';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -34,5 +34,23 @@ export const fetchSystemConfig = async (): Promise<SystemConfigResponse> => {
 // 3. 시스템 설정 업데이트 (PATCH)
 export const updateSystemConfig = async (data: SystemConfigUpdate): Promise<SystemConfigResponse> => {
   const response = await client.patch<SystemConfigResponse>('/api/system/config', data);
+  return response.data;
+};
+
+// 1. 단어 목록 조회 (GET)
+export const fetchDictionary = async (): Promise<DictionaryResponse> => {
+  const response = await client.get<DictionaryResponse>('/api/system/dictionary');
+  return response.data;
+};
+
+// 2. 단어 추가 (POST)
+export const addDictionaryWord = async (req: DictionaryRequest): Promise<string> => {
+  const response = await client.post<string>('/api/system/dictionary', req);
+  return response.data;
+};
+
+// 3. 단어 목록 일괄 수정 (PATCH)
+export const updateDictionary = async (data: DictionaryUpdate): Promise<DictionaryResponse> => {
+  const response = await client.patch<DictionaryResponse>('/api/system/dictionary', data);
   return response.data;
 };
