@@ -25,8 +25,6 @@ const defaultSettings: AppSettings = {
     political: false,
     spam: false,
     family: false, },
-  whiteList: ['바보', '멍청이'],
-  blackList: ['비하 별명', '경쟁 채널'],
 };
 
 // 설정을 불러오는 가짜 비동기 함수

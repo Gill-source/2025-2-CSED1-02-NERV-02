@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { YoutubeAnalysisResponse, SystemConfigResponse, SystemConfigUpdate } from './types';
+import type { YoutubeAnalysisResponse, SystemConfigResponse, SystemConfigUpdate, DictionaryRequest, DictionaryResponse, DictionaryUpdateResponse } from './types';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -34,5 +34,27 @@ export const fetchSystemConfig = async (): Promise<SystemConfigResponse> => {
 // 3. 시스템 설정 업데이트 (PATCH)
 export const updateSystemConfig = async (data: SystemConfigUpdate): Promise<SystemConfigResponse> => {
   const response = await client.patch<SystemConfigResponse>('/api/system/config', data);
+  return response.data;
+};
+
+// 1. 단어 목록 조회 (GET)
+export const fetchDictionary = async (listType: 'whitelist' | 'blacklist'): Promise<DictionaryResponse> => {
+  const response = await client.get<DictionaryResponse>('/api/system/dictionary', {
+    params: { list_type: listType }
+  });
+  return response.data;
+};
+
+// 2. 단어 일괄 추가 (POST)
+export const addDictionaryWord = async (req: DictionaryRequest): Promise<DictionaryUpdateResponse> => {
+  const response = await client.post<DictionaryUpdateResponse>('/api/system/dictionary', req);
+  return response.data;
+};
+
+// 3. 단어 목록 일괄 삭제 (DELETE)
+export const deleteDictionaryWord = async (req: DictionaryRequest): Promise<DictionaryUpdateResponse> => {
+  const response = await client.delete<DictionaryUpdateResponse>('/api/system/dictionary', {
+    data: req 
+  });
   return response.data;
 };

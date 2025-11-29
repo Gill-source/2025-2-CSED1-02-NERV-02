@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { useSettings, useUpdateSettings } from '../../hooks/useYoutubeQuery';
+import { useAddDictionaryWord, useDictionary, useDeleteDictionaryWord } from '../../hooks/useSystemConfig';
 
 // ----------------------------------------------------------------------
 // [내부 컴포넌트] 필터 섹션 (화이트리스트/블랙리스트 공통 UI)
@@ -138,49 +138,54 @@ const FilterSection = ({ title, description, tags, onUpdateTags, placeholder }: 
 // [메인] 필터 탭
 // ----------------------------------------------------------------------
 const FilterTab = () => {
-  // 상태 관리
-  // 1. Chrome Storage에서 설정 불러오기
-  const { data: settings } = useSettings();
-  
-  // 2. 설정 저장(Mutation) 훅 가져오기
-  const updateSettingsMutation = useUpdateSettings();
+  const { data: dictionary } = useDictionary();
+  const addMutation = useAddDictionaryWord();  
+ const deleteMutation = useDeleteDictionaryWord();
+  if (!dictionary) return null;
 
-  // 데이터 로딩 중이면 아무것도 안 보여주거나 로딩 스피너
-  if (!settings) return null;
-
-  // 화이트리스트 업데이트 함수
-  const handleUpdateWhiteList = (newTags: string[]) => {
-    updateSettingsMutation.mutate({
-      ...settings,
-      whiteList: newTags // 기존 설정 유지하고 whiteList만 변경
-    });
-  };
-
-  // 블랙리스트 업데이트 함수
-  const handleUpdateBlackList = (newTags: string[]) => {
-    updateSettingsMutation.mutate({
-      ...settings,
-      blackList: newTags // 기존 설정 유지하고 blackList만 변경
-    });
+const handleUpdateTags = (newTags: string[], type: 'whitelist' | 'blacklist') => {
+    const currentTags = type === 'whitelist' ? dictionary.whitelist : dictionary.blacklist;
+    
+    // CASE 1: 단어가 추가된 경우 (POST)
+    if (newTags.length > currentTags.length) {
+      const addedWords = newTags.filter(tag => !currentTags.includes(tag));
+      
+      if (addedWords.length > 0) {
+        addMutation.mutate({ 
+          words: addedWords, 
+          list_type: type 
+        });
+      }
+    } 
+    // CASE 2: 단어가 삭제된 경우 (DELETE)
+    else if (newTags.length < currentTags.length) {
+      const deletedWords = currentTags.filter(tag => !newTags.includes(tag));
+      
+      if (deletedWords.length > 0) {
+        deleteMutation.mutate({ 
+          words: deletedWords, 
+          list_type: type 
+        });
+      }
+    }
   };
 
   return (
     <div className="p-6 bg-white h-full">
       {/* 1. 화이트리스트 섹션 */}
-      <FilterSection
+     <FilterSection
         title="화이트리스트"
-        description="이 목록에 등록된 단어는 필터링 시스템에서 항상 안전한 단어로 인식됩니다. 욕설로 오해받을 수 있는 채널 밈, 애칭 등을 등록하여 오탐을 방지할 수 있습니다."
-        tags={settings.whiteList || []} 
-        onUpdateTags={handleUpdateWhiteList}
+        description="이 목록에 등록된 단어는 필터링 시스템에서 항상 안전한 단어로 인식됩니다."
+        tags={dictionary.whitelist} 
+        onUpdateTags={(newTags) => handleUpdateTags(newTags, 'whitelist')}
         placeholder="단어 입력 후 엔터 또는 쉼표"
       />
-
       {/* 2. 블랙리스트 섹션 */}
       <FilterSection
         title="블랙리스트"
-        description="이 목록의 단어가 포함된 댓글은 필터링 강도와 관계없이 시스템이 가장 먼저, 그리고 확실하게 차단/숨김 조치를 취합니다."
-        tags={settings.blackList || []}
-        onUpdateTags={handleUpdateBlackList}
+        description="이 목록의 단어가 포함된 댓글은 필터링 강도와 관계없이 시스템이 즉시 차단합니다."
+        tags={dictionary.blacklist} 
+        onUpdateTags={(newTags) => handleUpdateTags(newTags, 'blacklist')}
         placeholder="단어 입력 후 엔터 또는 쉼표"
       />
     </div>

@@ -47,6 +47,24 @@ export interface AppSettings {
     spam: boolean;       // SPAM
     family: boolean;     // FAMILY
   };
-  whiteList: string[];
-  blackList: string[];
+}
+
+export interface DictionaryRequest {
+  words: string[];
+  list_type: 'whitelist' | 'blacklist';
+}
+
+export interface DictionaryResponse {
+  whitelist?: string[]; 
+  blacklist?: string[]; 
+  total_count: number;
+}
+
+export interface DictionaryUpdateResponse {
+  status: string;
+  message: string;
+  processed_count: number;
+  current_total: {
+    [key: string]: number;
+  };
 }
