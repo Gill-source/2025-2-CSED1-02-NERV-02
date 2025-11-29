@@ -13,78 +13,108 @@ class FirstPassFilter:
         # 2. 경로 설정
         self.base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         self.dict_dir = os.path.join(self.base_dir, 'resources', 'dictionaries')
-        self.user_dict_path = os.path.join(self.dict_dir, 'user_dictionary.json')
         
-        # 3. 사전 데이터 로드 (메모리에 캐싱)
+        self.user_dict_path = os.path.join(self.dict_dir, 'user_dictionary.json')
+        self.system_dict_path = os.path.join(self.dict_dir, 'word_dictionary.json')
+        
+        # 3. 데이터 컨테이너 초기화
         self.user_whitelist = set()
         self.user_blacklist = set()
         self.system_dictionary = set()
         
-        self._load_user_dictionary(os.path.join(self.dict_dir, 'user_dictionary.json'))
-        self._load_system_dictionary(os.path.join(self.dict_dir, 'word_dictionary.json'))
+        # 4. 로드
+        self._load_user_dictionary()
+        self._load_system_dictionary()
         
         print("[System] 1차 필터 준비 완료.")
 
-    def _update_user_dictionary(self, word: str, list_type: str) -> bool:
+    def get_user_dictionary(self, list_type: str) -> dict:
         """
-        사용자 사전에 단어를 추가하고 파일에 저장합니다. (Update)
-        list_type: 'whitelist' 또는 'blacklist'
+        현재 메모리에 로드된 사용자 사전을 반환합니다.
         """
-        word = word.strip().lower()
-        if not word:
-            return False
 
-        # 1. 메모리 업데이트
         if list_type == 'whitelist':
-            if word in self.user_whitelist: return False # 중복
-            self.user_whitelist.add(word)
+            return {"whitelist": sorted(list(self.user_whitelist))}
+        
         elif list_type == 'blacklist':
-            if word in self.user_blacklist: return False # 중복
-            self.user_blacklist.add(word)
-        else:
-            return False
+            return {"blacklist": sorted(list(self.user_blacklist))}
+        
+        return {}
 
-        # 2. 파일 저장 (영구 반영)
-        return self._save_user_dictionary()
+    def _update_user_dictionary(self, words: list, list_type: str, action: str) -> int:
+        """
+        사용자 사전을 갱신(추가/삭제)하고 파일에 저장합니다.
+        """
+        if list_type == 'whitelist':
+            target_set = self.user_whitelist
+        elif list_type == 'blacklist':
+            target_set = self.user_blacklist
+        else:
+            return 0
+
+        changed_count = 0
+        
+        for word in words:
+            word = word.strip().lower()
+            if not word: continue
+
+            if action == 'add':
+                if word not in target_set:
+                    target_set.add(word)
+                    changed_count += 1
+                    
+            elif action == 'remove':
+                if word in target_set:
+                    target_set.remove(word)
+                    changed_count += 1
+        
+        if changed_count > 0:
+            self._save_user_dictionary()
+            
+        return changed_count
 
     def _save_user_dictionary(self) -> bool:
-        """내부 메서드: 현재 메모리 상태를 JSON 파일로 덮어쓰기"""
+        """
+        현재 메모리의 화이트/블랙리스트를 파일에 덮어씁니다.
+        """
         try:
             data = {
-                "user_whitelist": list(self.user_whitelist),
-                "user_blacklist": list(self.user_blacklist)
+                "user_whitelist": sorted(list(self.user_whitelist)),
+                "user_blacklist": sorted(list(self.user_blacklist))
             }
             with open(self.user_dict_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
             return True
         except Exception as e:
-            print(f"[Error] 사전 저장 실패: {e}")
-            return False    
+            print(f"[Error] 사용자 사전 저장 실패: {e}")
+            return False
 
-    def _load_user_dictionary(self, filepath):
-        """내부 메서드: 사용자 사전 로드"""
+    def _load_user_dictionary(self):
+        """사용자 사전 로드 """
         try:
-            with open(filepath, 'r', encoding='utf-8') as f:
+            with open(self.user_dict_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                self.user_whitelist = set(w.strip().lower() for w in data.get("user_whitelist", []))
-                self.user_blacklist = set(w.strip().lower() for w in data.get("user_blacklist", []))
+                
+            self.user_whitelist = set(w.strip().lower() for w in data.get("user_whitelist", []))
+            self.user_blacklist = set(w.strip().lower() for w in data.get("user_blacklist", []))
+            
             print(f"  ㄴ 사용자 사전 로드됨: 화이트({len(self.user_whitelist)}), 블랙({len(self.user_blacklist)})")
-        except Exception as e:
-            print(f"  [Error] 사용자 사전 로드 실패: {e}")
+            
+        except Exception as e: print(f"  [Error] 사용자 사전 로드 실패: {e}")           
 
-    def _load_system_dictionary(self, filepath):
-        """내부 메서드: 시스템 사전 로드"""
+    def _load_system_dictionary(self):
+        """시스템 사전 로드 """
         try:
-            with open(filepath, 'r', encoding='utf-8') as f:
+            with open(self.system_dict_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+                
                 for category, content in data.items():
-                    # 단어들을 시스템 사전에 추가
                     for word in content.get("words", []):
                         self.system_dictionary.add(word.strip().lower())
-                    # 시스템 사전 내의 'white' 리스트도 처리하려면 여기에 로직 추가 가능
+            
             print(f"  ㄴ 시스템 사전 로드됨: {len(self.system_dictionary)}개 단어")
-        except Exception as e:
-            print(f"  [Error] 시스템 사전 로드 실패: {e}")
+
+        except Exception as e: print(f"  [Error] 시스템 사전 로드 실패: {e}")
 
     def normalize_text(self, text: str) -> str:
         text = text.lower()
