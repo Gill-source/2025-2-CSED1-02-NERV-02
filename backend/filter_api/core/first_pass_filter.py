@@ -13,6 +13,7 @@ class FirstPassFilter:
         # 2. 경로 설정
         self.base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         self.dict_dir = os.path.join(self.base_dir, 'resources', 'dictionaries')
+        self.user_dict_path = os.path.join(self.dict_dir, 'user_dictionary.json')
         
         # 3. 사전 데이터 로드 (메모리에 캐싱)
         self.user_whitelist = set()
@@ -23,6 +24,42 @@ class FirstPassFilter:
         self._load_system_dictionary(os.path.join(self.dict_dir, 'word_dictionary.json'))
         
         print("[System] 1차 필터 준비 완료.")
+
+    def _update_user_dictionary(self, word: str, list_type: str) -> bool:
+        """
+        사용자 사전에 단어를 추가하고 파일에 저장합니다. (Update)
+        list_type: 'whitelist' 또는 'blacklist'
+        """
+        word = word.strip().lower()
+        if not word:
+            return False
+
+        # 1. 메모리 업데이트
+        if list_type == 'whitelist':
+            if word in self.user_whitelist: return False # 중복
+            self.user_whitelist.add(word)
+        elif list_type == 'blacklist':
+            if word in self.user_blacklist: return False # 중복
+            self.user_blacklist.add(word)
+        else:
+            return False
+
+        # 2. 파일 저장 (영구 반영)
+        return self._save_user_dictionary()
+
+    def _save_user_dictionary(self) -> bool:
+        """내부 메서드: 현재 메모리 상태를 JSON 파일로 덮어쓰기"""
+        try:
+            data = {
+                "user_whitelist": list(self.user_whitelist),
+                "user_blacklist": list(self.user_blacklist)
+            }
+            with open(self.user_dict_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            return True
+        except Exception as e:
+            print(f"[Error] 사전 저장 실패: {e}")
+            return False    
 
     def _load_user_dictionary(self, filepath):
         """내부 메서드: 사용자 사전 로드"""

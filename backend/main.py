@@ -1,6 +1,7 @@
 import sys
 import os
 from typing import List, Optional, Dict, Any
+from dotenv import set_key, find_dotenv
 
 from fastapi import FastAPI, HTTPException, Body
 from pydantic import BaseModel, Field
@@ -20,7 +21,8 @@ except ImportError as e:
 app = FastAPI(
     title="YouTube Comment Filtering System API",
     description="1차/2차/위험도/정책 모델을 엄격하게 분리하여 단계별 데이터 변화를 명확히 보여주는 API",
-    version="2.0.0"
+    version="1.0.2",
+    openapi_version="3.0.2"
 )
 
 app.add_middleware(
@@ -48,13 +50,34 @@ except Exception as e:
 # [Pydantic 모델 정의] - 단계별 엄격한 분리 (Strict Mode)
 # =========================================================
 
-# 1. [입력] Raw Text
+# [사전 관리 모델]
+
+class DictionaryAddRequest(BaseModel):
+    word: str = Field(..., description="추가할 단어", json_schema_extra={"example": "나쁜말"})
+    list_type: str = Field(..., description="'whitelist' 또는 'blacklist'", json_schema_extra={"example": "blacklist"})
+
+# [시스템 설정 모델]
+
+class SystemConfigUpdate(BaseModel):
+    security_level: Optional[int] = Field(None, description="보안 레벨 (1~5)", ge=1, le=5, json_schema_extra={"example": 4})
+    risk_threshold: Optional[float] = Field(None, description="위험도 임계값 (0.0~1.0)", ge=0.0, le=1.0, json_schema_extra={"example": 0.75})
+    use_detail_ai: Optional[bool] = Field(None, description="2차 정밀 AI 모델 사용 여부", json_schema_extra={"example": True})
+    enabled_modules: Optional[List[str]] = Field(None, description="활성화할 AI 모듈 키 리스트", json_schema_extra={"example": ["SEXUAL", "PRIVACY", "AGGRESSION"]})
+
+class SystemConfigResponse(BaseModel):
+    security_level: int
+    risk_threshold: float
+    use_detail_ai_model: bool
+    enabled_modules: List[str]
+
+# --- [Raw Text] ---
+
 class TextInput(BaseModel):
     text: str = Field(..., json_schema_extra={
         "example": "야이 개새끼야 ㅋㅋ 니네 집 주소 다 털었다 010-1234-5678 밤길 조심해라"
     })
 
-# --- [Step 1 전용 모델] ---
+# --- [1차 필터링 결과 모델] ---
 
 class FirstPassDetectedWord(BaseModel):
     word: str = Field(..., description="1차 필터가 잡아낸 단어", json_schema_extra={"example": "개새끼"})
@@ -70,7 +93,7 @@ class FirstPassResponse(BaseModel):
         "example": "야이 __F__야 ㅋㅋ 니네 집 주소 다 털었다 010-1234-5678 밤길 조심해라"
     })
 
-# --- [Step 2 전용 모델] ---
+# --- [2차 필터링 결과 모델] ---
 
 class SecondPassDetectedWord(BaseModel):
     word: str = Field(..., description="1차 혹은 2차 필터가 잡아낸 단어", json_schema_extra={"example": "010-1234-5678"})
@@ -90,7 +113,7 @@ class SecondPassResponse(BaseModel):
         "example": "야이 __F__야 ㅋㅋ __S__ __S__ __S__"
     })
 
-# --- [Step 3 & 4 전용 모델] ---
+# --- [위험도 계산 및 정책 모델] ---
 
 class RiskResponse(BaseModel):
     risk_score: float = Field(..., description="0.0 ~ 1.0 사이의 위험도 점수", json_schema_extra={"example": 0.98})
@@ -132,7 +155,101 @@ class YoutubeAnalysisResponse(BaseModel):
 
 
 # =========================================================
-# [API 1] 개별 모듈 테스트 (Unit APIs)
+# [API 1] 시스템 설정 관리 API (System Config APIs)
+# =========================================================
+
+@app.post("/api/system/dictionary", summary="사용자 사전(화이트/블랙) 단어 추가")
+async def add_dictionary_word(req: DictionaryAddRequest):
+    """
+    사용자 정의 화이트리스트 또는 블랙리스트에 단어를 추가하고 즉시 적용합니다.
+    - **list_type**: 'whitelist' (허용) / 'blacklist' (차단)
+    """
+    if req.list_type not in ['whitelist', 'blacklist']:
+        raise HTTPException(status_code=400, detail="list_type은 'whitelist' 또는 'blacklist'여야 합니다.")
+    
+    success = first_filter._update_user_dictionary(req.word, req.list_type)
+    
+    if success:
+        return {
+            "status": "success",
+            "message": f"'{req.word}' 단어가 {req.list_type}에 추가되었습니다.",
+            "current_count": {
+                "whitelist": len(first_filter.user_whitelist),
+                "blacklist": len(first_filter.user_blacklist)
+            }
+        }
+    else:
+        return {
+            "status": "ignored",
+            "message": f"'{req.word}' 단어는 이미 {req.list_type}에 존재하거나 저장에 실패했습니다."
+        }
+
+@app.get("/api/system/config", response_model=SystemConfigResponse, summary="현재 시스템 설정 조회")
+async def get_system_config():
+    """현재 메모리에 로드된 시스템 설정값을 조회합니다."""
+    return {
+        "security_level": config.SECURITY_LEVEL,
+        "risk_threshold": config.RISK_THRESHOLD,
+        "use_detail_ai_model": config.USE_DETAIL_AI_MODEL,
+        "enabled_modules": list(config.SPECIAL_AI_MODULES.keys())
+    }
+
+@app.patch("/api/system/config", summary="시스템 설정 동적 변경 (영구 저장)")
+async def update_system_config(settings: SystemConfigUpdate):
+    """
+    설정을 변경하고 .env 파일에 영구적으로 저장합니다.
+    주의: .env 파일이 변경되면 uvicorn이 이를 감지하고 서버를 재시작할 수 있습니다.
+    """
+    updated_fields = {}
+    dotenv_file = find_dotenv()
+
+    # 1. 보안 레벨 변경
+    if settings.security_level is not None:
+        config.SECURITY_LEVEL = settings.security_level
+        set_key(dotenv_file, "SECURITY_LEVEL", str(settings.security_level))
+        updated_fields["security_level"] = settings.security_level
+
+    # 2. 위험도 임계값 변경
+    if settings.risk_threshold is not None:
+        config.RISK_THRESHOLD = settings.risk_threshold
+        set_key(dotenv_file, "RISK_THRESHOLD", str(settings.risk_threshold))
+        updated_fields["risk_threshold"] = settings.risk_threshold
+
+    # 3. 정밀 AI 모델 사용 여부 변경
+    if settings.use_detail_ai is not None:
+        config.USE_DETAIL_AI_MODEL = settings.use_detail_ai
+        set_key(dotenv_file, "USE_DETAIL_AI_MODEL", str(settings.use_detail_ai))
+        updated_fields["use_detail_ai_model"] = settings.use_detail_ai
+
+    # 4. 활성 모듈 변경
+    if settings.enabled_modules is not None: 
+        new_modules = {}
+        valid_keys = []
+        
+        for key in settings.enabled_modules: 
+            key_upper = key.upper()
+            if key_upper in config._SPECIAL_AI_MODULE_DEFINITIONS:
+                new_modules[key_upper] = config._SPECIAL_AI_MODULE_DEFINITIONS[key_upper]
+                valid_keys.append(key_upper)
+        
+        config.SPECIAL_AI_MODULES = new_modules
+        modules_str = ",".join(valid_keys)
+        set_key(dotenv_file, "ENABLED_MODULES", modules_str) 
+        updated_fields["enabled_modules"] = valid_keys
+
+    return {
+        "status": "updated (saved to .env)",
+        "updated_fields": updated_fields,
+        "current_config": {
+            "security_level": config.SECURITY_LEVEL,
+            "risk_threshold": config.RISK_THRESHOLD,
+            "enabled_modules": list(config.SPECIAL_AI_MODULES.keys())
+        }
+    }           
+
+
+# =========================================================
+# [API 2] 개별 모듈 테스트 (Unit APIs)
 # =========================================================
 
 @app.post("/api/modules/first-pass", response_model=FirstPassResponse, summary="Step 1. 1차 필터링")
@@ -246,7 +363,7 @@ async def get_youtube_comments_raw(video_id: str, max_pages: int = 1):
     return {"video_id": video_id, "total_count": len(comments), "comments": comments}
 
 # =========================================================
-# [API 2] 전체 통합 워크플로우 (Workflow APIs)
+# [API 3] 전체 통합 워크플로우 (Workflow APIs)
 # =========================================================
 
 def _run_pipeline(text: str) -> dict:
@@ -307,8 +424,12 @@ async def analyze_youtube_video(video_id: str, max_pages: int = 1):
         if analysis['action'] != "PASS":
             blocked_count += 1
 
+    video_title = "Unknown Video"
+    if video_info and isinstance(video_info, dict):
+        video_title = video_info.get('snippet', {}).get('title', 'Unknown Video')
+
     return {
-        "video_info": {"title": video_info.get('snippet', {}).get('title', 'Unknown'), "id": video_id},
+        "video_info": {"title": video_title, "id": video_id},
         "stats": {"total_comments": len(comments), "blocked_comments": blocked_count, "clean_comments": len(comments) - blocked_count},
         "results": analyzed_results
     }
@@ -316,3 +437,4 @@ async def analyze_youtube_video(video_id: str, max_pages: int = 1):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    # Swagger UI (Docs): http://localhost:8000/docs
