@@ -17,6 +17,7 @@ interface FilterSectionProps {
 const FilterSection = ({ title, description, tags, opposingTags, opposingTitle, onUpdateTags, placeholder }: FilterSectionProps) => {
   const [input, setInput] = useState('');
   const [showHelp, setShowHelp] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // 태그 추가 로직 (엔터 또는 쉼표)
@@ -29,25 +30,33 @@ const FilterSection = ({ title, description, tags, opposingTags, opposingTitle, 
 
   const addTag = () => {
     const trimmed = input.trim().replace(/,/g, ''); // 쉼표 제거
-    if (trimmed && !tags.includes(trimmed)) {
-      // [수정 2] 중복 방지 로직 (현재 리스트)
-    if (tags.includes(trimmed)) {
-      alert(`이미 '${title}'에 존재하는 단어입니다.`);
-      setInput('');
+    if (!trimmed) {
+      // 빈 값일 때는 에러 없이 그냥 종료 (onBlur 시 자연스러움)
       return;
     }
 
-    // [수정 3] 교차 검증 로직 (반대쪽 리스트 검사)
-    // 대소문자 구분 없이 비교하려면 .toLowerCase()를 사용하세요.
-    if (opposingTags.includes(trimmed)) {
-      alert(`이 단어는 이미 '${opposingTitle}'에 등록되어 있어 추가할 수 없습니다.\n먼저 해당 리스트에서 삭제해주세요.`);
-      // 입력창을 비우지 않고 유지하여 사용자가 수정할 수 있게 함 (선택사항)
+    // 1. 중복 검사 (현재 리스트)
+    if (tags.includes(trimmed)) {
+      setError(`이미 '${title}'에 존재하는 단어입니다.`); // alert 대신 setError
+      // setInput(''); // [선택] 사용자가 수정할 수 있게 유지하는 것이 좋음
       return;
     }
-      const newTags = [...tags, trimmed];
-      onUpdateTags(newTags);
-      setInput('');
+
+    // 2. 교차 검증 (반대쪽 리스트)
+    const isConflict = opposingTags.some(tag => 
+      tag.toLowerCase() === trimmed.toLowerCase()
+    );
+
+    if (isConflict) {
+      setError(`'${opposingTitle}'에 등록된 단어라 추가할 수 없습니다.`);
+      return;
     }
+
+    // 통과 시 추가
+    const newTags = [...tags, trimmed];
+    onUpdateTags(newTags);
+    setInput('');
+    setError(null); // 성공하면 에러 초기화
   };
 
   // 태그 삭제
@@ -96,7 +105,9 @@ const FilterSection = ({ title, description, tags, opposingTags, opposingTitle, 
       {/* 입력 컨테이너 */}
       <div 
         onClick={handleContainerClick}
-        className="border-2 border-black rounded-2xl p-4 min-h-[80px] flex items-start bg-white cursor-text relative"
+        className={`border-2 rounded-2xl p-4 min-h-[80px] flex flex-wrap items-start bg-white cursor-text relative transition-colors
+          ${error ? 'border-red-500' : 'border-black'} 
+        `} // 에러 시 테두리 빨간색으로 변경
       >
         <div className="flex flex-wrap gap-2 flex-1 pr-10">
           {/* 태그 리스트 */}
@@ -146,6 +157,12 @@ const FilterSection = ({ title, description, tags, opposingTags, opposingTitle, 
           </button>
         )}
       </div>
+{/* [추가] 에러 메시지 출력 영역 */}
+      {error && (
+        <div className="mt-2 text-red-500 text-sm font-medium animate-pulse">
+          ⚠️ {error}
+        </div>
+      )}
     </section>
   );
 };
