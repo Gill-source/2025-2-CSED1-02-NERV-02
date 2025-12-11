@@ -8,11 +8,13 @@ interface FilterSectionProps {
   title: string;
   description: string;
   tags: string[];
+  opposingTags: string[]; 
+  opposingTitle: string;
   onUpdateTags: (newTags: string[]) => void;
   placeholder?: string;
 }
 
-const FilterSection = ({ title, description, tags, onUpdateTags, placeholder }: FilterSectionProps) => {
+const FilterSection = ({ title, description, tags, opposingTags, opposingTitle, onUpdateTags, placeholder }: FilterSectionProps) => {
   const [input, setInput] = useState('');
   const [showHelp, setShowHelp] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -28,6 +30,20 @@ const FilterSection = ({ title, description, tags, onUpdateTags, placeholder }: 
   const addTag = () => {
     const trimmed = input.trim().replace(/,/g, ''); // 쉼표 제거
     if (trimmed && !tags.includes(trimmed)) {
+      // [수정 2] 중복 방지 로직 (현재 리스트)
+    if (tags.includes(trimmed)) {
+      alert(`이미 '${title}'에 존재하는 단어입니다.`);
+      setInput('');
+      return;
+    }
+
+    // [수정 3] 교차 검증 로직 (반대쪽 리스트 검사)
+    // 대소문자 구분 없이 비교하려면 .toLowerCase()를 사용하세요.
+    if (opposingTags.includes(trimmed)) {
+      alert(`이 단어는 이미 '${opposingTitle}'에 등록되어 있어 추가할 수 없습니다.\n먼저 해당 리스트에서 삭제해주세요.`);
+      // 입력창을 비우지 않고 유지하여 사용자가 수정할 수 있게 함 (선택사항)
+      return;
+    }
       const newTags = [...tags, trimmed];
       onUpdateTags(newTags);
       setInput('');
@@ -177,6 +193,9 @@ const handleUpdateTags = (newTags: string[], type: 'whitelist' | 'blacklist') =>
         title="화이트리스트"
         description="이 목록에 등록된 단어는 필터링 시스템에서 항상 안전한 단어로 인식됩니다."
         tags={dictionary.whitelist} 
+        // [수정 4] 반대쪽(블랙리스트) 정보를 전달
+        opposingTags={dictionary.blacklist}
+        opposingTitle="블랙리스트"
         onUpdateTags={(newTags) => handleUpdateTags(newTags, 'whitelist')}
         placeholder="단어 입력 후 엔터 또는 쉼표"
       />
@@ -185,6 +204,8 @@ const handleUpdateTags = (newTags: string[], type: 'whitelist' | 'blacklist') =>
         title="블랙리스트"
         description="이 목록의 단어가 포함된 댓글은 필터링 강도와 관계없이 시스템이 즉시 차단합니다."
         tags={dictionary.blacklist} 
+        opposingTags={dictionary.whitelist}
+        opposingTitle="화이트리스트"
         onUpdateTags={(newTags) => handleUpdateTags(newTags, 'blacklist')}
         placeholder="단어 입력 후 엔터 또는 쉼표"
       />
