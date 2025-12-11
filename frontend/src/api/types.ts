@@ -3,7 +3,7 @@ export interface YoutubeCommentSummary {
   published_at: string;
   original: string;
   processed: string;
-  action: 'PASS' | 'MASK' | 'AUTO_HIDE';
+  action: 'PASS' | 'MASKING' | 'REVIEW_HUMAN' | 'AUTO_HIDE' | 'PERMANENT_DELETE';
   risk_score: number;
   violation_tags: string[]; // e.g., ["AI_AGGRESSION", "SYSTEM_KEYWORD"]
 }
@@ -16,7 +16,8 @@ export interface YoutubeAnalysisResponse {
   };
   stats: {
     total_comments?: number;
-    filtered_count?: number;
+    blocked_comments?: number; // [수정] filtered_count -> blocked_comments
+    clean_comments?: number;  
     [key: string]: number | undefined;
   };
   results: YoutubeCommentSummary[];
