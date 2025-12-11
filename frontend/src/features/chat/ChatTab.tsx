@@ -117,24 +117,6 @@ const ChatTab = () => {
                   {/* 1. 서버에서 온 위반 태그들 */}
                   {comment.violation_tags.map(tag => (
                     <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-gray-200 text-gray-600 rounded font-medium">
-                      #{tag}
-                    </span>
-                  ))}
-                  
-                  {/* 2. 로컬 차단 태그 (스타일 통일) */}
-                  {isLocalBlacklisted && (
-                    <span className="text-[10px] px-1.5 py-0.5 bg-red-100 text-red-600 rounded font-bold border border-red-200">
-                      #LOCAL_BLOCK
-                    </span>
-                  )}
-                </div>
-              )}
-              
-              {/* 디버깅용 태그 표시 */}
-              {comment.violation_tags.length > 0 && (
-                <div className="flex gap-1 mt-2">
-                  {comment.violation_tags.map(tag => (
-                    <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-gray-200 text-gray-600 rounded">
                       {tag}
                     </span>
                   ))}
