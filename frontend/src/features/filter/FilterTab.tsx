@@ -8,13 +8,16 @@ interface FilterSectionProps {
   title: string;
   description: string;
   tags: string[];
+  opposingTags: string[]; 
+  opposingTitle: string;
   onUpdateTags: (newTags: string[]) => void;
   placeholder?: string;
 }
 
-const FilterSection = ({ title, description, tags, onUpdateTags, placeholder }: FilterSectionProps) => {
+const FilterSection = ({ title, description, tags, opposingTags, opposingTitle, onUpdateTags, placeholder }: FilterSectionProps) => {
   const [input, setInput] = useState('');
   const [showHelp, setShowHelp] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // 태그 추가 로직 (엔터 또는 쉼표)
@@ -27,11 +30,33 @@ const FilterSection = ({ title, description, tags, onUpdateTags, placeholder }: 
 
   const addTag = () => {
     const trimmed = input.trim().replace(/,/g, ''); // 쉼표 제거
-    if (trimmed && !tags.includes(trimmed)) {
-      const newTags = [...tags, trimmed];
-      onUpdateTags(newTags);
-      setInput('');
+    if (!trimmed) {
+      // 빈 값일 때는 에러 없이 그냥 종료 (onBlur 시 자연스러움)
+      return;
     }
+
+    // 1. 중복 검사 (현재 리스트)
+    if (tags.includes(trimmed)) {
+      setError(`이미 '${title}'에 존재하는 단어입니다.`); // alert 대신 setError
+      // setInput(''); // [선택] 사용자가 수정할 수 있게 유지하는 것이 좋음
+      return;
+    }
+
+    // 2. 교차 검증 (반대쪽 리스트)
+    const isConflict = opposingTags.some(tag => 
+      tag.toLowerCase() === trimmed.toLowerCase()
+    );
+
+    if (isConflict) {
+      setError(`'${opposingTitle}'에 등록된 단어라 추가할 수 없습니다.`);
+      return;
+    }
+
+    // 통과 시 추가
+    const newTags = [...tags, trimmed];
+    onUpdateTags(newTags);
+    setInput('');
+    setError(null); // 성공하면 에러 초기화
   };
 
   // 태그 삭제
@@ -80,7 +105,9 @@ const FilterSection = ({ title, description, tags, onUpdateTags, placeholder }: 
       {/* 입력 컨테이너 */}
       <div 
         onClick={handleContainerClick}
-        className="border-2 border-black rounded-2xl p-4 min-h-[80px] flex items-start bg-white cursor-text relative"
+        className={`border-2 rounded-2xl p-4 min-h-[80px] flex flex-wrap items-start bg-white cursor-text relative transition-colors
+          ${error ? 'border-red-500' : 'border-black'} 
+        `} // 에러 시 테두리 빨간색으로 변경
       >
         <div className="flex flex-wrap gap-2 flex-1 pr-10">
           {/* 태그 리스트 */}
@@ -130,6 +157,12 @@ const FilterSection = ({ title, description, tags, onUpdateTags, placeholder }: 
           </button>
         )}
       </div>
+{/* [추가] 에러 메시지 출력 영역 */}
+      {error && (
+        <div className="mt-2 text-red-500 text-sm font-medium animate-pulse">
+          ⚠️ {error}
+        </div>
+      )}
     </section>
   );
 };
@@ -177,6 +210,9 @@ const handleUpdateTags = (newTags: string[], type: 'whitelist' | 'blacklist') =>
         title="화이트리스트"
         description="이 목록에 등록된 단어는 필터링 시스템에서 항상 안전한 단어로 인식됩니다."
         tags={dictionary.whitelist} 
+        // [수정 4] 반대쪽(블랙리스트) 정보를 전달
+        opposingTags={dictionary.blacklist}
+        opposingTitle="블랙리스트"
         onUpdateTags={(newTags) => handleUpdateTags(newTags, 'whitelist')}
         placeholder="단어 입력 후 엔터 또는 쉼표"
       />
@@ -185,6 +221,8 @@ const handleUpdateTags = (newTags: string[], type: 'whitelist' | 'blacklist') =>
         title="블랙리스트"
         description="이 목록의 단어가 포함된 댓글은 필터링 강도와 관계없이 시스템이 즉시 차단합니다."
         tags={dictionary.blacklist} 
+        opposingTags={dictionary.whitelist}
+        opposingTitle="화이트리스트"
         onUpdateTags={(newTags) => handleUpdateTags(newTags, 'blacklist')}
         placeholder="단어 입력 후 엔터 또는 쉼표"
       />

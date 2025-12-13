@@ -33,7 +33,7 @@ export const MOCK_ANALYSIS_DATA: YoutubeAnalysisResponse = {
       published_at: "10 minutes ago",
       original: "돈 버는 법 알려드림. 링크 클릭 -> http://...",
       processed: "돈 버는 법 알려드림. 링크 클릭 -> http://...",
-      action: "MASK",
+      action: "PERMANENT_DELETE",
       risk_score: 0.85,
       violation_tags: ["AI_SPAM"],
     },
