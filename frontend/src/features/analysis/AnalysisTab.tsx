@@ -25,8 +25,10 @@ const AnalysisTab = () => {
   if (isLoading) return <div className="p-4">분석 데이터 로딩 중...</div>;
   if (!data) return <div className="p-4">데이터가 없습니다.</div>;
 
-  const total = data.stats.total_comments || 0;
-  const filtered = data.stats.filtered_count || 0;
+  const total = data.results.length;
+  
+  const filtered = data.results.filter(comment => comment.action !== 'PASS').length;
+  
   const safe = total - filtered;
   
   // 퍼센트 계산
