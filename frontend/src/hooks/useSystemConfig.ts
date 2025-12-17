@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchSystemConfig, updateSystemConfig, addDictionaryWord, fetchDictionary, deleteDictionaryWord } from '../api/services';
-import type { AppSettings, SystemConfigResponse, DictionaryRequest, DictionaryResponse, DictionaryUpdateResponse } from '../api/types';
+import type { AppSettings, SystemConfigResponse, DictionaryRequest } from '../api/types';
 
 const MODULE_MAP: Record<keyof AppSettings['modules'], string> = {
   modified: 'MODIFIED',
@@ -13,22 +13,22 @@ const MODULE_MAP: Record<keyof AppSettings['modules'], string> = {
 };
 
 // [기본값 정의] 서버 에러 시 보여줄 기본 설정
-const DEFAULT_SETTINGS: AppSettings = {
-  intensity: 3,
-  modules: {
-    modified: false,
-    sexual: false,
-    privacy: false,
-    aggression: false,
-    political: false,
-    spam: false,
-    family: false,
-  },
-};
+// const DEFAULT_SETTINGS: AppSettings = {
+//   intensity: 3,
+//   modules: {
+//     modified: false,
+//     sexual: false,
+//     privacy: false,
+//     aggression: false,
+//     political: false,
+//     spam: false,
+//     family: false,
+//   },
+// };
 
 const MOCK_DICTIONARY = {
-  whitelist: ['개꿀', '미쳤다', '지린다'],
-  blacklist: ['카톡방', '무료종목', '010-']
+  whitelist: [],
+  blacklist: []
 };
 
 // [변환기] 백엔드 -> 프론트엔드

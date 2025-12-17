@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useYoutubeAnalysis, useSettings } from '../../hooks/useYoutubeQuery';
+import { useYoutubeAnalysis } from '../../hooks/useYoutubeQuery';
+import { useDictionary } from '../../hooks/useSystemConfig';
 
 const ChatTab = () => {
   const [videoId, setVideoId] = useState<string | null>(null);
@@ -41,22 +42,46 @@ const ChatTab = () => {
   }, []);
 
   // 2. TanStack Query로 데이터 가져오기
-  const { data, isLoading, isError } = useYoutubeAnalysis(videoId);
-  const { data: settings } = useSettings(); // 설정값도 가져옴 (필터링 로직용)
+  // [설계 일치: 백엔드 API 연동] Analysis API 및 Dictionary API 호출
+  const { data: analysisData, isLoading, isError } = useYoutubeAnalysis(videoId);
+  const { data: dictionary } = useDictionary();
+
+  // [설계 일치: 안전 모드] 데이터 로딩 실패 시 빈 배열 처리 (Fail-safe)
+  const localBlacklist = dictionary?.blacklist || [];
+  const localWhitelist = dictionary?.whitelist || []; // 화이트리스트도 가져옴
 
   if (errorMsg) return <div className="p-4 text-center text-gray-500">{errorMsg}</div>;
   if (isLoading) return <div className="p-8 text-center">분석 중입니다... 🛡️</div>;
-  if (isError || !data) return <div className="p-4 text-center text-red-500">데이터를 불러오는데 실패했습니다.</div>;
+  if (isError || !analysisData) return <div className="p-4 text-center text-red-500">데이터를 불러오는데 실패했습니다.</div>;
 
   return (
     <div className="flex flex-col space-y-4 p-2">
-      {data.results.map((comment, index) => {
-        // 간단한 필터링 표시 로직: AUTO_HIDE 상태이거나 위험 점수가 높으면 흐리게 표시
-        const isHidden = comment.action === 'AUTO_HIDE';
-        const isUserBlacklisted = settings?.blackList.some(word => comment.original.includes(word));
+      {analysisData.results.map((comment, index) => {
+       // =================================================================================
+        // [Logic Alignment] 요구사항명세서 및 상세설계서 로직 구현
+        // =================================================================================
         
-        // 최종적으로 숨길지 결정 (API 결과 OR 사용자 블랙리스트)
-        const shouldBlur = isHidden || isUserBlacklisted;
+        // 1. [동작 규칙 1] 화이트리스트 최우선 적용 (Whitelist Priority) 
+        // - 로컬 화이트리스트에 있는 단어가 포함되면 무조건 통과 (서버 판단보다 우선할 수도 있음 - UI UX상)
+        const isWhitelisted = localWhitelist.some(goodWord => 
+          comment.original.toLowerCase().includes(goodWord.toLowerCase())
+        );
+
+        // 2. [Step 4. Policy Manager] 서버의 정책 판단 확인 (Server Action)
+        // - 백엔드에서 보안 레벨과 위험 점수를 계산해 내린 최종 처분
+        const isServerHidden = comment.action === 'AUTO_HIDE' || comment.action === 'PERMANENT_DELETE';
+
+        // 3. [UI_REQ_004] 클라이언트 로컬 블랙리스트 확인 (Local Blacklist)
+        // - 서버 응답과 무관하게 사용자가 지정한 단어는 즉시 차단
+        const isLocalBlacklisted = localBlacklist.some(badWord => 
+          comment.original.toLowerCase().includes(badWord.toLowerCase())
+        );
+
+        // 4. [최종 판별] 이중 필터링 로직 (Dual-Check)
+        // - 화이트리스트가 아니면서, (서버가 숨기라고 했거나 OR 로컬 블랙리스트에 걸렸거나)
+        const shouldBlur = !isWhitelisted && (isServerHidden || isLocalBlacklisted);
+
+        // =================================================================================
 
         return (
           <div key={index} className={`flex items-start space-x-3 p-2 rounded-lg transition-colors ${shouldBlur ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
@@ -71,18 +96,27 @@ const ChatTab = () => {
                 <span className="text-xs text-gray-400">{comment.published_at}</span>
               </div>
               
-              <p className={`text-sm mt-1 leading-relaxed break-words ${shouldBlur ? 'text-gray-400 italic' : 'text-gray-700'}`}>
-                {shouldBlur ? 
-                  (isUserBlacklisted ? "🚫 사용자 블랙리스트 단어가 포함되어 숨겨졌습니다." : "🛡️ 규정 위반으로 숨겨진 메시지입니다.") 
-                  : comment.processed
-                }
+             {/* 본문 (조건부 렌더링) */}
+              <p className={`text-sm mt-1 leading-relaxed break-words ${shouldBlur ? 'text-red-500 italic text-xs' : 'text-gray-700'}`}>
+                {shouldBlur ? (
+                  <span className="flex items-center">
+                     {/* 아이콘 추가로 시각적 인지 강화 */}
+                    <span className="mr-1">🚫</span>
+                    {isLocalBlacklisted 
+                      ? "사용자 블랙리스트 단어가 포함되어 숨겨졌습니다." 
+                      : "규정 위반으로 숨겨진 메시지입니다."}
+                  </span>
+                ) : (
+                  comment.processed
+                )}
               </p>
               
-              {/* 디버깅용 태그 표시 */}
-              {comment.violation_tags.length > 0 && (
-                <div className="flex gap-1 mt-2">
+              {/* 태그 표시 영역 (서버 태그 + 로컬 차단 태그) */}
+              {(comment.violation_tags.length > 0 || isLocalBlacklisted) && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {/* 1. 서버에서 온 위반 태그들 */}
                   {comment.violation_tags.map(tag => (
-                    <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-gray-200 text-gray-600 rounded">
+                    <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-gray-200 text-gray-600 rounded font-medium">
                       {tag}
                     </span>
                   ))}
@@ -92,6 +126,11 @@ const ChatTab = () => {
           </div>
         );
       })}
+      {analysisData.results.length === 0 && (
+        <div className="text-center text-gray-400 text-xs py-10">
+          표시할 댓글이 없습니다.
+        </div>
+      )}
     </div>
   );
 };
