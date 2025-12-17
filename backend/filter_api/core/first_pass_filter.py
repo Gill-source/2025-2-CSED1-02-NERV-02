@@ -166,6 +166,8 @@ class FirstPassFilter:
 
 if __name__ == "__main__":
     import json
+    import time
+    import os
 
     print("==========================================")
     print("▶ [Debug] FirstPassFilter 독립 실행 테스트")
@@ -175,23 +177,28 @@ if __name__ == "__main__":
     filter_instance = FirstPassFilter()
     
     # 2. 테스트 케이스
-    test_comments = [
-        "유튜버 개새끼",          # 사용자 블랙리스트 (USER_BLACKLIST)
-        "유튜버 천사",            # 사용자 화이트리스트 (허용 -> __W__)
-        "유튜버 씨발",            # 시스템 욕설 (SYSTEM_KEYWORD)
-        "씨#!@#@#@#발 새끼",     # 특수문자 섞인 욕설 (정규화 후 차단)
-        "안녕하세요 좋은 하루",      # 정상
-        "이거 개노잼이네"          # 욕설은 아니지만 2차 필터 감 (PENDING_AI)
-    ]
+    test_file_path = os.path.join(filter_instance.base_dir, 'resources', 'test_data', 'test_comments.txt')
+    with open(test_file_path, "r", encoding="utf-8") as f:
+        test_comments = [line.strip() for line in f if line.strip()]
     
     # 3. 테스트 실행
-    for comment in test_comments:
-        print(f"\n[Input] : {comment}")
-        
-        # 클래스의 메서드 호출
+    filter_instance.execute("더미 데이터")
+    total_time = 0
+    for idx, comment in enumerate(test_comments):
+        start = time.perf_counter()
         result = filter_instance.execute(comment)
+        end = time.perf_counter()
+        # print(f"\n[Input] : {comment}")
         
-        # 결과 출력 (JSON 형태로 예쁘게)
-        print("[Result]:")
-        print(json.dumps(result, indent=4, ensure_ascii=False))
-        print("-" * 40)
+        # # 결과 출력 (JSON 형태로 예쁘게)
+        # print("[Result]:")
+        # print(json.dumps(result, indent=4, ensure_ascii=False))
+        print(f"[Time]: {(end - start)*1000:.4f} ms")
+        # print("-" * 40)
+        total_time += (end - start)
+
+    avg_time = total_time*1000 / len(test_comments)
+
+    print(f"▶ 테스트 케이스 수: {len(test_comments)}")
+    print(f"▶ 전체 소요 시간: {total_time:.4f} sec")
+    print(f"▶ 문장당 평균 처리 속도: {avg_time:.4f} ms")

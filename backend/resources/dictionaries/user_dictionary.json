@@ -1,6 +1,5 @@
 {
-  "user_whitelist": [],
-  "user_blacklist": [
-    "침펄풍"
-  ]
+  "user_whitelist": ["멍청이", "", "바보", "트롤"],
+  "user_blacklist": ["", "", "개새끼", "병신"]
 }
+
