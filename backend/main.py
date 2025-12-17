@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from starlette.middleware.cors import CORSMiddleware
 
 try:
-    import config
+    from config import config
     from filter_api.core.first_pass_filter import FirstPassFilter
     from filter_api.core.second_pass_filter import SecondPassFilter
     from filter_api.core.risk_scorer import RiskScorer

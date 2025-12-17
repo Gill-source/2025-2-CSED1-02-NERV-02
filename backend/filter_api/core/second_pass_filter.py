@@ -13,7 +13,7 @@ backend_dir = os.path.join(project_dir, "backend")
 sys.path.append(backend_dir)
 
 try:
-    import config
+    from config import config
 except ImportError:
     print("Error: config.py를 찾을 수 없습니다.", file=sys.stderr)
     print(f"Current Path: {sys.path}", file=sys.stderr)
