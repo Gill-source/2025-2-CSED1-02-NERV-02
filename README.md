@@ -1,5 +1,5 @@
 ## 🚨 [ About 'GuardFilter' ]
-GuardFilter는 **다중 AI 모듈을 이용하여 크리에이터 개인화 필터링 시스템** 입니다.
+GuardFilter는 **다중 AI 모듈을 이용한 크리에이터 개인화 필터링 시스템** 입니다.
 
 ## 🧠 [ Team NERV ]
 | [황종길](https://github.com/Gill-source) | [류민주](https://github.com/minij02) | [김현근](https://github.com/v1340414) | [박현수](https://github.com/phs314)) |
